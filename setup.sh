@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL_ID="MoritzLaurer/bge-m3-zeroshot-v2.0"
+MODEL_ID_1="MoritzLaurer/bge-m3-zeroshot-v2.0"
+MODEL_ID_2="MoritzLaurer/ModernBERT-base-zeroshot-v2.0"
+MODEL_ID_3="MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33"
+MODEL_ID_4="MoritzLaurer/xtremedistil-l6-h256-zeroshot-v1.1-all-33"
 APP_DIR="/opt/ml-droplet"
 
 echo "==> Adding 2GB swap"
@@ -33,10 +36,12 @@ python3 -c "
 from optimum.onnxruntime import ORTModelForSequenceClassification
 from transformers import AutoTokenizer
 
-model_id = '$MODEL_ID'
-AutoTokenizer.from_pretrained(model_id)
-ORTModelForSequenceClassification.from_pretrained(model_id, subfolder='onnx')
-print('Model downloaded and cached')
+for model_id in ['$MODEL_ID_1', '$MODEL_ID_2', '$MODEL_ID_3', '$MODEL_ID_4']:
+    print(f'Downloading {model_id}...')
+    AutoTokenizer.from_pretrained(model_id)
+    ORTModelForSequenceClassification.from_pretrained(model_id, subfolder='onnx')
+    print(f'  {model_id} cached')
+print('All models downloaded')
 "
 
 echo "==> Creating systemd service"

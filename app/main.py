@@ -4,7 +4,7 @@ import trafilatura
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
-from app.classifier import classify, get_classifier
+from app.classifier import MODELS, classify, load_all
 from app.models import (
     ClassifyRequest,
     ClassifyResponse,
@@ -15,7 +15,7 @@ from app.models import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    get_classifier()
+    load_all()
     yield
 
 
@@ -27,10 +27,21 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/models")
+def list_models():
+    return [
+        {"name": name, "full_name": info["id"], "params": info["params"], "size": info["size"], "weight": info["weight"]}
+        for name, info in MODELS.items()
+    ]
+
+
 @app.post("/classify", response_model=ClassifyResponse)
 def classify_content(req: ClassifyRequest):
-    results = classify(req.content, req.assertions)
-    return ClassifyResponse(results=results)
+    try:
+        results = classify(req.content, req.assertions, req.model)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return ClassifyResponse(model=req.model, results=results)
 
 
 @app.post("/extract", response_model=ExtractResponse)
