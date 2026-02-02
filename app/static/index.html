@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zero-Shot Classifier</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+  .container { width: 100%; max-width: 640px; }
+  h1 { font-size: 1.5rem; margin-bottom: 1.5rem; color: #f8fafc; }
+  label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 0.35rem; }
+  input, textarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    background: #1e293b;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, textarea:focus { border-color: #6366f1; }
+  textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+  .field { margin-bottom: 1rem; }
+  button {
+    background: #6366f1;
+    color: #fff;
+    border: none;
+    padding: 0.6rem 1.5rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:hover { background: #4f46e5; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #status {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    min-height: 1.2em;
+  }
+  #results { margin-top: 1.5rem; }
+  .bar-row { margin-bottom: 0.75rem; }
+  .bar-label {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    margin-bottom: 0.25rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .bar-track {
+    height: 24px;
+    background: #1e293b;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    width: 0;
+    transition: width 0.6s ease;
+  }
+  .error { color: #f87171; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Zero-Shot Classifier</h1>
+  <div class="field">
+    <label for="url">Article URL</label>
+    <input type="url" id="url" placeholder="https://example.com/article">
+  </div>
+  <div class="field">
+    <label for="assertions">Assertions (one per line)</label>
+    <textarea id="assertions">This content is about technology
+This content uses technical language
+This content is suitable for children
+This content is safe for children
+This content is about cooking</textarea>
+  </div>
+  <button id="btn">Classify</button>
+  <div id="status"></div>
+  <div id="results"></div>
+</div>
+<script>
+const btn = document.getElementById('btn');
+const statusEl = document.getElementById('status');
+const resultsEl = document.getElementById('results');
+
+function hsl(score) {
+  const hue = score * 120;
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
+btn.addEventListener('click', async () => {
+  const url = document.getElementById('url').value.trim();
+  const lines = document.getElementById('assertions').value
+    .split('\n').map(l => l.trim()).filter(Boolean);
+  if (!url) { statusEl.innerHTML = '<span class="error">Enter a URL.</span>'; return; }
+  if (!lines.length) { statusEl.innerHTML = '<span class="error">Add at least one assertion.</span>'; return; }
+
+  btn.disabled = true;
+  resultsEl.innerHTML = '';
+  statusEl.textContent = 'Extracting article content...';
+
+  try {
+    const extRes = await fetch('/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!extRes.ok) {
+      const err = await extRes.json();
+      throw new Error(err.detail || 'Extraction failed');
+    }
+    const { content, title } = await extRes.json();
+    statusEl.textContent = 'Running classification' + (title ? ` on "${title}"` : '') + '...';
+
+    const clsRes = await fetch('/classify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, assertions: lines })
+    });
+    if (!clsRes.ok) {
+      const err = await clsRes.json();
+      throw new Error(err.detail || 'Classification failed');
+    }
+    const { results } = await clsRes.json();
+    statusEl.textContent = title ? `Results for "${title}"` : 'Results';
+
+    resultsEl.innerHTML = Object.entries(results).map(([label, score]) => `
+      <div class="bar-row">
+        <div class="bar-label"><span>${label}</span><span>${(score * 100).toFixed(1)}%</span></div>
+        <div class="bar-track">
+          <div class="bar-fill" data-score="${score}" style="background:${hsl(score)}"></div>
+        </div>
+      </div>
+    `).join('');
+
+    requestAnimationFrame(() => {
+      resultsEl.querySelectorAll('.bar-fill').forEach(el => {
+        el.style.width = (parseFloat(el.dataset.score) * 100) + '%';
+      });
+    });
+  } catch (e) {
+    statusEl.innerHTML = `<span class="error">${e.message}</span>`;
+    resultsEl.innerHTML = '';
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
