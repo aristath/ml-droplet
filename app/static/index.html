@@ -244,6 +244,7 @@ This content is about cooking
 This content is optimistic</textarea>
     </div>
     <button id="btn">Classify</button>
+    <button id="gen-url" style="background:#334155">Generate URL</button>
     <div id="status"></div>
     <div id="options">
       <div class="opt-row" id="model-checks"></div>
@@ -295,8 +296,13 @@ fetch('/models').then(r => r.json()).then(models => {
       `<label class="cb"><input type="checkbox" id="cb-${CSS.escape(m.name)}" checked>${m.name}</label>`
     ).join('');
   optionsEl.style.display = 'block';
-  // Auto-classify if ?url= param is present
-  const paramUrl = new URLSearchParams(window.location.search).get('url');
+  // Auto-fill from URL params
+  const params = new URLSearchParams(window.location.search);
+  const paramUrl = params.get('url');
+  const paramAssertions = params.get('assertions');
+  if (paramAssertions) {
+    document.getElementById('assertions').value = paramAssertions;
+  }
   if (paramUrl) {
     document.getElementById('url').value = paramUrl;
     btn.click();
@@ -471,6 +477,26 @@ btn.addEventListener('click', async () => {
   } finally {
     btn.disabled = false;
   }
+});
+
+document.getElementById('gen-url').addEventListener('click', () => {
+  const url = document.getElementById('url').value.trim();
+  const assertions = document.getElementById('assertions').value.trim();
+  const params = new URLSearchParams();
+  if (url) params.set('url', url);
+  if (assertions) params.set('assertions', assertions);
+  const full = window.location.origin + window.location.pathname + '?' + params.toString();
+  const tmp = document.createElement('textarea');
+  tmp.value = full;
+  tmp.style.position = 'fixed';
+  tmp.style.opacity = '0';
+  document.body.appendChild(tmp);
+  tmp.select();
+  document.execCommand('copy');
+  document.body.removeChild(tmp);
+  const genBtn = document.getElementById('gen-url');
+  genBtn.textContent = 'Copied to clipboard';
+  setTimeout(() => { genBtn.textContent = 'Generate URL'; }, 6000);
 });
 </script>
 </body>
